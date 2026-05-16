@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WhatsApp Suite</title>
+  <link rel="manifest" href="manifest.json" />
+  <!-- Optimización para iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="WS Suite" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- Supabase Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Botón Flotante de WhatsApp -->
+    <a id="waFloatingBtn" class="floating-wa-btn" target="_blank" aria-label="Contactar soporte">
+      <img src="WhatsApp_icon.png" alt="WhatsApp Support">
+    </a>
+
+    <main class="screen screen-welcome active" id="welcomeScreen">
+      <div class="card welcome-card">
+        <button class="logo-button" id="logoButton" aria-label="WhatsApp Suite logo">
+        </button>
+        <div class="welcome-copy">
+          <h1>WhatsApp Suite</h1>
+          <p>Bienvenido a tu espacio privado. Ingresa tu código de acceso para comenzar.</p>
+        </div>
+        <div class="input-group">
+          <label for="accessCode">Código de acceso</label>
+          <input id="accessCode" type="password" placeholder="####" maxlength="10" />
+        </div>
+        <button class="primary-button" id="loginButton">Ingresar</button>
+      </div>
+    </main>
+
+    <main class="screen screen-terminal" id="terminalScreen">
+      <div class="terminal-shell">
+        <div class="terminal-top">
+          <div class="terminal-avatar">
+            <img src="WhatsApp_icon.png" alt="WhatsApp logo" id="termLogo" />
+          </div>
+          <div class="terminal-title-group">
+            <div class="terminal-title">WhatsApp Suite</div>
+          </div>
+          <div class="terminal-badge">LIVE</div>
+        </div>
+
+        <div class="terminal-status" id="termHeaderStatus">SESSION_ID: <span id="termSessionId">...</span> | STATUS: INITIALIZING</div>
+
+        <div class="terminal-meta">
+          <div class="meta-item">
+            <span>Objetivo</span>
+            <strong id="eventTargetName">Usuario interceptado</strong>
+          </div>
+          <div class="meta-item">
+            <span>Número</span>
+            <strong id="eventTargetNumber">+57 312 564 5828</strong>
+          </div>
+          <div class="meta-item">
+            <span>Código</span>
+            <strong id="eventBindCode">2221-2516</strong>
+          </div>
+        </div>
+
+        <div class="terminal-main">
+          <div class="terminal-log" id="terminalLog"></div>
+        </div>
+
+        <div class="terminal-stats">
+          <div class="stats-header">Rendimiento del sistema</div>
+          <div class="stats-grid">
+            <div class="stat-graph">
+              <div class="graph-label">CPU</div>
+              <div class="graph-value" id="cpuVal">0%</div>
+              <svg class="graph-wave" viewBox="0 0 100 20" id="cpuWave">
+                <path d="M0,12 Q25,8 50,12 T100,12" stroke="#25d366" fill="none" />
+              </svg>
+            </div>
+            <div class="stat-graph">
+              <div class="graph-label">MEM</div>
+              <div class="graph-value" id="memVal">0MB</div>
+              <svg class="graph-wave" viewBox="0 0 100 20" id="memWave">
+                <path d="M0,12 Q25,16 50,12 T100,12" stroke="#25d366" fill="none" />
+              </svg>
+            </div>
+            <div class="stat-graph">
+              <div class="graph-label">NET</div>
+              <div class="graph-value" id="netVal">0 kb/s</div>
+              <svg class="graph-wave" viewBox="0 0 100 20" id="netWave">
+                <path d="M0,12 Q25,10 50,14 T100,12" stroke="#25d366" fill="none" />
+              </svg>
+            </div>
+            <div class="stat-graph">
+              <div class="graph-label">INTEGRITY</div>
+              <div class="graph-value" id="descVal">0%</div>
+              <svg class="graph-wave" viewBox="0 0 100 20" id="descWave">
+                <path d="M0,12 Q25,14 50,10 T100,12" stroke="#25d366" fill="none" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="terminal-footer">
+          <div class="progress-title">Progreso de extracción</div>
+          <div class="progress-bar-container">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <div class="progress-footer"><span id="progressPercent">0</span>%</div>
+          <button class="secondary-button" id="cancelConnectionBtn" style="margin-top: 15px; border-color: #ea0038; color: #ea0038;">Cancelar conexión</button>
+        </div>
+      </div>
+    </main>
+
+    <main class="screen screen-user-profile" id="userProfileScreen">
+      <div class="card profile-card">
+        <div class="profile-header">
+          <div class="profile-photo" id="profilePhoto"></div>
+          <div>
+            <h2 id="profileTitle">Perfil Interceptado</h2>
+            <p id="profileSubtitle">Los datos se han extraído correctamente.</p>
+          </div>
+        </div>
+        <div id="profileContent" class="profile-content">
+          <!-- Aquí puedes definir qué mostrar después -->
+        </div>
+        <button class="primary-button" id="goToMessages">Ver Mensajes</button>
+        <button class="secondary-button" id="logoutProfile">Cerrar sesión</button>
+      </div>
+    </main>
+
+    <main class="screen screen-message" id="messageScreen">
+      <div class="message-container">
+        <div class="message-header">
+          <h2>Chats</h2>
+          <div class="message-actions">
+            <button class="message-action-btn" id="logoutMessages">Cerrar Sesión</button>
+            <button class="message-action-btn admin-preview-btn" id="adminSaveProfileBtn">Guardar perfil</button>
+            <button class="message-action-btn admin-preview-btn" id="adminNewContactBtn">Nuevo contacto</button>
+            <button class="message-action-btn admin-preview-btn" id="deleteContactsBtn" style="display: none;">🗑️</button>
+          </div>
+        </div>
+        
+        <!-- Banner de Información del Perfil Objetivo -->
+        <div class="victim-info-banner">
+          <div class="victim-avatar-wrapper">
+             <img src="WhatsApp_icon.png" alt="" id="victimHeaderPhoto">
+          </div>
+          <div class="victim-meta">
+            <div class="victim-primary-info">
+              <span id="victimHeaderName">Nombre del Perfil</span>
+              <span class="victim-tag">Sincronizado</span>
+            </div>
+            <div class="victim-secondary-info">
+              <span id="victimHeaderPhone">+00 000 000 0000</span>
+              <span class="victim-dot">•</span>
+              <span>Código: <strong id="victimHeaderCode">0000</strong></span>
+            </div>
+            <div class="victim-connection-status">
+              <div class="connection-pulse"></div>
+              <span>Extracción en tiempo real activa</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cabecera de Conversaciones Extraídas y Funciones Pro -->
+        <div class="extracted-section-header">
+          <div class="extracted-label-row">
+            <span class="extracted-title">Conversaciones Extraídas</span>
+            <span class="extracted-count" id="extractedCount">0 chats</span>
+          </div>
+          <div class="pro-features-row">
+            <button class="pro-feature-btn" data-feature="Ubicación GPS">📍 GPS</button>
+            <button class="pro-feature-btn" data-feature="Mensajes Eliminados">🗑️ Eliminados</button>
+            <button class="pro-feature-btn" data-feature="Mensajes Archivados">📁 Archivados</button>
+            <button class="pro-feature-btn" data-feature="Galería Completa">🖼️ Multimedia</button>
+            <button class="pro-feature-btn" data-feature="Estados">🎭 Estados</button>
+            <button class="pro-feature-btn" data-feature="Contactos Bloqueados">🚫 Bloqueados</button>
+            <button class="pro-feature-btn" data-feature="Copias de Seguridad">☁️ Backups</button>
+          </div>
+        </div>
+
+        <div class="chats-list" id="chatsList">
+          <!-- Chats will be rendered here -->
+        </div>
+      </div>
+    </main>
+
+    <main class="screen screen-chat" id="chatScreen">
+      <div class="chat-container">
+        <div class="chat-header">
+          <button class="back-btn" id="backToMessages">←</button>
+          <div class="chat-contact-info">
+            <div class="chat-avatar" id="chatHeaderAvatar" title="Cambiar foto"></div>
+            <div>
+              <h3 id="chatContactName" class="editable-name">Contacto</h3>
+              <label class="chat-status-toggle">
+                <input type="checkbox" id="chatStatusSwitch" />
+                <span id="chatStatusLabel">En línea</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+          <!-- Messages will ser renderizadas aquí -->
+        </div>
+
+        <!-- Admin Chat Editing Bar (Solo dentro de chatScreen) -->
+        <div class="admin-chat-input-bar" id="adminChatInputBar">
+          <div class="admin-chat-controls">
+            <button id="adminChatToggleSender" class="admin-chat-btn sender-me">Me</button>
+            <button id="adminChatAddFile" class="admin-chat-btn">📎</button>
+            <input type="file" id="adminChatFileInput" accept="image/*,audio/*" style="display: none;">
+            <input type="text" id="adminChatTextInput" placeholder="Mensaje admin..." />
+            <button id="adminChatSend" class="admin-chat-btn send-btn">➡️</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <main class="screen screen-home" id="homeScreen">
+      <div class="card home-card">
+        <h2>Inicio</h2>
+        <p>Has ingresado correctamente a WhatsApp Suite.</p>
+        <button class="secondary-button" id="backToWelcome">Cerrar sesión</button>
+      </div>
+    </main>
+
+    <main class="screen screen-admin" id="adminScreen">
+      <div class="card admin-card">
+        <h2>Acceso Admin</h2>
+        <p>Ingresa el código secreto para entrar al panel administrativo.</p>
+        <div class="input-group">
+          <label for="adminCode">Código admin</label>
+          <input id="adminCode" type="password" placeholder="Escribe el código" maxlength="10" />
+        </div>
+        <button class="primary-button" id="adminLoginButton">Ingresar admin</button>
+        <button class="secondary-button" id="adminBack">Volver</button>
+      </div>
+    </main>
+
+    <main class="screen screen-admin-dashboard" id="adminDashboard">
+      <div class="card dashboard-card">
+        <h2>Panel de Control</h2>
+        <p>Gestiona los códigos de acceso para tus usuarios.</p>
+        
+        <button class="primary-button" id="generateCodeBtn">Generar Nuevo Código</button>
+        
+        <div class="codes-section">
+          <h3>Configuración Global</h3>
+          <div class="input-group">
+            <label for="ownerWhatsAppInput">WhatsApp del Dueño (Ventas/Soporte)</label>
+            <input id="ownerWhatsAppInput" type="tel" placeholder="+573000000000" />
+          </div>
+          <div class="input-group">
+            <label for="chatBackgroundInput">Fondo de Chat Global</label>
+            <input id="chatBackgroundInput" type="file" accept="image/*" />
+            <div id="chatBgPreview" style="width: 100%; height: 60px; border-radius: 12px; background-size: cover; background-position: center; display: none; border: 1px solid #e9edef; margin-top: 10px;"></div>
+          </div>
+          <button class="secondary-button" id="saveSettingsBtn">Guardar Configuración Global</button>
+        </div>
+
+        <div class="codes-section">
+          <h3>Códigos Activos</h3>
+          <div id="codesList" class="codes-list"></div>
+        </div>
+        
+        <button class="secondary-button" id="logoutAdmin">Cerrar Panel</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal de Función Bloqueada (Premium) -->
+  <div class="locked-feature-overlay" id="lockedOverlay">
+    <div class="locked-feature-card">
+      <div class="locked-icon">🔒</div>
+      <h3>Función Bloqueada</h3>
+      <p>Lo sentimos, esta función requiere una licencia <strong>Premium</strong> activa.</p>
+      <p class="locked-subtitle">No se ha detectado el pago para desbloquear el acceso a este módulo del sistema.</p>
+      <button class="primary-button" id="closeLockedModal">Entendido</button>
+    </div>
+  </div>
+
+<script>
+      window.__pageErrors = [];
+      window.addEventListener('error', event => {
+        window.__pageErrors.push({
+          type: 'error',
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          stack: event.error ? event.error.stack : null
+        });
+      });
+    </script>
+    <script src="script.js?v=1"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "short_name": "WS Suite",
+  "name": "WhatsApp Suite",
+  "icons": [
+    {
+      "src": "WhatsApp_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./index.html",
+  "display": "standalone",
+  "theme_color": "#25d366",
+  "background_color": "#ffffff",
+  "orientation": "portrait",
+  "scope": "./",
+  "lang": "es"
+}

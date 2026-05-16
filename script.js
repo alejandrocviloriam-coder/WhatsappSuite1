@@ -53,7 +53,6 @@ const profilePhoto = document.getElementById('profilePhoto');
 const loginButton = document.getElementById('loginButton');
 const logoButton = document.getElementById('logoButton');
 const accessCodeInput = document.getElementById('accessCode');
-const skipTerminalButton = document.getElementById('skipTerminalButton');
 const adminCodeInput = document.getElementById('adminCode');
 const goToMessages = document.getElementById('goToMessages');
 const messageScreen = document.getElementById('messageScreen');
@@ -318,9 +317,10 @@ async function loadFromSupabase() {
   if (error) {
     console.error('Error cargando de Supabase:', error.message);
   } else if (data && data.length > 0) {
-    // Preservar cambios pendientes antes de recargar
+    // Preservar TODOS los cambios pendientes de fotos (perfiles y chats) antes de recargar
     const pendingChanges = new Map();
-    let profilePhotoToPreserve = null;
+    const pendingProfilePhotos = new Map(); // Para las fotos de perfil de los códigos
+    let incomingData = data;
     
     userProfiles.forEach(profile => {
       if (profile.chats) {
@@ -333,11 +333,22 @@ async function loadFromSupabase() {
           }
         });
       }
-      // Preservar foto de perfil del usuario actual
-      if (currentUser && profile.code === currentUser.code && profile._pendingProfilePhotoFile) {
-        profilePhotoToPreserve = profile._pendingProfilePhotoFile;
+      // Preservar fotos de perfil pendientes para cualquier código que se esté editando
+      if (profile._pendingProfilePhotoFile || profile._pendingProfilePhotoPreview) {
+        pendingProfilePhotos.set(profile.code, {
+          file: profile._pendingProfilePhotoFile,
+          preview: profile._pendingProfilePhotoPreview
+        });
       }
     });
+
+    // Si estamos editando un perfil, evitamos que la base de datos sobrescriba lo que tenemos en memoria
+    if (isPreviewMode && currentUser) {
+      const index = incomingData.findIndex(p => p.code === currentUser.code);
+      if (index !== -1) {
+        incomingData[index] = currentUser;
+      }
+    }
 
     // Filtrar configuración global
     const settings = data.find(p => p.code === 'system_settings');
@@ -359,7 +370,7 @@ async function loadFromSupabase() {
       }
     }
     
-    userProfiles = data;
+    userProfiles = incomingData;
     
     // Restaurar cambios pendientes en contactos
     userProfiles.forEach(profile => {
@@ -375,13 +386,22 @@ async function loadFromSupabase() {
       }
     });
     
-    // Restaurar foto de perfil pendiente y actualizar currentUser
+    // Restaurar fotos de perfil y actualizar currentUser
+    userProfiles.forEach(profile => {
+      if (pendingProfilePhotos.has(profile.code)) {
+        const pending = pendingProfilePhotos.get(profile.code);
+        profile._pendingProfilePhotoFile = pending.file;
+        profile._pendingProfilePhotoPreview = pending.preview;
+      }
+    });
+
     if (currentUser) {
       const updatedProfile = userProfiles.find(p => p.code === currentUser.code);
       if (updatedProfile) {
         currentUser = updatedProfile;
-        if (profilePhotoToPreserve) {
-          currentUser._pendingProfilePhotoFile = profilePhotoToPreserve;
+        if (currentChat) {
+          const updatedChat = currentUser.chats?.find(c => c.id === currentChat.id);
+          if (updatedChat) currentChat = updatedChat;
         }
       }
     }
@@ -398,9 +418,14 @@ async function refreshDataFromSupabase() {
   if (messageScreen && messageScreen.classList.contains('active')) {
     renderChats();
   }
-  if (chatScreen && chatScreen.classList.contains('active') && currentChat) {
-    renderMessages(currentChat.messages || []);
+  if (chatScreen && chatScreen.classList.contains('active')) {
+    if (chatMessages) {
+      chatMessages.style.backgroundImage = globalChatBackground ? `url('${globalChatBackground}')` : 'none';
+    }
+    if (currentChat) renderMessages(currentChat.messages || []);
   }
+  // Actualizar botones de flotante y configuración si están visibles
+  updateFloatingBtn();
 }
 
 let profileRefreshInterval = null;
@@ -448,20 +473,12 @@ function setupSupabaseRealtime() {
   if (!supabaseClient) return;
 
   try {
-    if (typeof supabaseClient.channel === 'function') {
-      const channel = supabaseClient.channel('profiles_updates');
-      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
-        await refreshDataFromSupabase();
-      });
-      channel.subscribe();
-    } else if (typeof supabaseClient.from === 'function' && typeof supabaseClient.from('profiles').on === 'function') {
-      supabaseClient
-        .from('profiles')
-        .on('*', async () => {
-          await refreshDataFromSupabase();
-        })
-        .subscribe();
-    }
+    const channel = supabaseClient.channel('db-changes');
+    channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        refreshDataFromSupabase();
+      })
+      .subscribe();
   } catch (error) {
     console.warn('No se pudo inicializar Supabase Realtime:', error);
   }
@@ -548,16 +565,24 @@ function renderChats() {
   const victimHeaderCode = document.getElementById('victimHeaderCode');
 
   if (currentUser) {
-    if (victimHeaderPhoto) victimHeaderPhoto.src = currentUser.photo || 'WhatsApp_icon.png';
+    if (victimHeaderPhoto) victimHeaderPhoto.src = currentUser._pendingProfilePhotoPreview || currentUser.photo || 'WhatsApp_icon.png';
     if (victimHeaderName) {
       victimHeaderName.textContent = currentUser.name || 'Objetivo';
       victimHeaderName.contentEditable = isPreviewMode;
-      victimHeaderName.onblur = () => { if(isPreviewMode) currentUser.name = victimHeaderName.textContent.trim(); };
+      victimHeaderName.onblur = () => { 
+        if(isPreviewMode) {
+          currentUser.name = victimHeaderName.textContent.trim();
+        }
+      };
     }
     if (victimHeaderPhone) {
       victimHeaderPhone.textContent = currentUser.phone || 'Número oculto';
       victimHeaderPhone.contentEditable = isPreviewMode;
-      victimHeaderPhone.onblur = () => { if(isPreviewMode) currentUser.phone = victimHeaderPhone.textContent.trim(); };
+      victimHeaderPhone.onblur = () => { 
+        if(isPreviewMode) {
+          currentUser.phone = victimHeaderPhone.textContent.trim();
+        }
+      };
     }
     if (victimHeaderCode) victimHeaderCode.textContent = currentUser.code || '0000';
 
@@ -572,6 +597,7 @@ function renderChats() {
           if (file) {
             currentUser._pendingProfilePhotoFile = file;
             const base64 = await fileToBase64(file);
+            currentUser._pendingProfilePhotoPreview = base64;
             victimHeaderPhoto.src = base64;
           }
         };
@@ -767,6 +793,7 @@ function openChat(chat, adminEditMode = false) {
     if (adminChatInputBar) adminChatInputBar.style.display = 'block';
   } else {
     editableChatContactName.contentEditable = false;
+    editableChatContactName.onblur = null;
     editableChatContactName.classList.remove('admin-mode-editable');
     if (chatStatusSwitch) {
       chatStatusSwitch.checked = (chat.status || 'online') === 'online';
@@ -837,16 +864,12 @@ function renderMessages(messages) {
       if (textNode) {
         textNode.addEventListener('blur', () => {
           message.text = textNode.textContent.trim();
-          saveProfiles(currentUser);
-          renderChats(); // Sincroniza la lista de contactos
         });
       }
       const timeNode = messageDiv.querySelector('.message-time');
       if (timeNode) {
         timeNode.addEventListener('blur', () => {
           message.time = timeNode.textContent.trim();
-          saveProfiles(currentUser);
-          renderChats();
         });
       }
     }
@@ -882,7 +905,6 @@ async function deleteSelectedMessages() {
   selectedMessages.clear();
   messageSelectMode = false;
   messageContextMenu.classList.remove('active');
-  await saveProfiles(currentUser); // Guardar cambios en Supabase/Local
   renderMessages(currentChat.messages);
   renderChats(); // Sincronizar con la lista de contactos
   updateMessageDeleteButton();
@@ -981,7 +1003,6 @@ function addNewContact() {
     messages: JSON.parse(JSON.stringify(defaultChats[0].messages)) // Copiar mensajes por defecto
   };
   profile.chats.push(newContact);
-  saveProfiles(profile); // Guardar el perfil con el nuevo contacto
   renderChats(); // Re-renderizar la lista de chats para que el nuevo contacto aparezca
 }
 
@@ -1008,7 +1029,6 @@ async function addNewMessage() {
       url: mediaUrl,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
-    // No guardamos en Supabase todavía, solo localmente
     adminChatFileInput.value = '';
     adminChatTextInput.value = '';
     clearMediaPreview(); // Limpiar la miniatura después de enviar
@@ -1050,7 +1070,6 @@ async function deleteCurrentMessage() {
     const msg = chat.messages[editingMessageIndex]; // El mensaje a eliminar
     if (msg.url) await deleteFile(msg.url); // Borrar archivo de Storage si exista
     chat.messages.splice(editingMessageIndex, 1);
-    saveProfiles(currentUser); // Guardar cambio
     editingMessageIndex = null;
     messageSelectMode = false;
     selectedMessages.clear();
@@ -1109,8 +1128,9 @@ function renderCodes() {
     const realIndex = userProfiles.indexOf(profile);
     const div = document.createElement('div');
     div.className = 'code-item';
-    const thumb = profile.photo
-      ? `<img src="${profile.photo}" class="code-thumb" style="width:40px;height:40px;object-fit:cover;border-radius:10px;">`
+    const displayPhoto = profile._pendingProfilePhotoPreview || profile.photo;
+    const thumb = displayPhoto
+      ? `<img src="${displayPhoto}" class="code-thumb" style="width:40px;height:40px;object-fit:cover;border-radius:10px;">`
       : `<div class="code-thumb-placeholder">${profile.code.charAt(0)}</div>`;
 
     div.innerHTML = `
@@ -1281,7 +1301,6 @@ function startHackerTransition(user) {
   if (document.getElementById('eventTargetNumber')) document.getElementById('eventTargetNumber').innerText = user.phone || 'Oculto';
 
   const totalDuration = 120000; // 2 minutos
-  skipTerminalButton.style.display = 'block'; // Mostrar botón de saltar
 
   const runSimulation = () => {
     timer = setInterval(() => {
@@ -1321,7 +1340,6 @@ function startHackerTransition(user) {
           renderChats();
           showScreen(messageScreen);
         }, 1200);
-        skipTerminalButton.style.display = 'none'; // Ocultar botón al finalizar
       }
     }, 200); // Intervalo de actualización más rápido para mayor fluidez
   };
@@ -1354,24 +1372,10 @@ loginButton.addEventListener('click', () => {
     ensureUserProfileChats(user);
     startHackerTransition(user);
     accessCodeInput.value = '';
-    // No mostrar el botón de "Saltar Proceso" para usuarios normales
-    skipTerminalButton.style.display = isPreviewMode ? 'block' : 'none';
   } else {
     alert('Código de acceso incorrecto o no generado.');
     accessCodeInput.value = '';
     accessCodeInput.focus();
-    skipTerminalButton.style.display = 'none'; // Asegurarse de que no esté visible si el login falla
-  }
-});
-
-// Event listener para el botón de saltar
-skipTerminalButton.addEventListener('click', () => {
-  if (currentUser) {
-    clearInterval(timer); // Detener cualquier simulación en curso
-    isPreviewMode = false; // Asegurarse de que no estamos en modo preview al saltar
-    renderChats();
-    showScreen(messageScreen); // Mostrar la pantalla de mensajes
-    skipTerminalButton.style.display = 'none'; // Ocultar el botón después de usarlo
   }
 });
 
@@ -1411,6 +1415,7 @@ if (adminSaveProfileBtn) {
       const url = await uploadFile(currentUser._pendingProfilePhotoFile, 'profiles');
       if (url) currentUser.photo = url;
       delete currentUser._pendingProfilePhotoFile;
+      delete currentUser._pendingProfilePhotoPreview;
     }
 
     // 2. Subida masiva de fotos de contactos de la lista
@@ -1470,7 +1475,6 @@ if (deleteContactsBtn) {
     selectedContacts.clear();
     contactSelectMode = false;
     updateAdminButtonsVisibility();
-    saveProfiles(currentUser);
     renderChats();
   };
 }
@@ -1591,8 +1595,6 @@ logoutMessages.addEventListener('click', () => {
 // --- Configuración del Menú Admin (3 puntos) y Selección ---
 window.addEventListener('load', async () => {
   setupStorageSync();
-  // Asegurar que el botón de "Saltar Proceso" no sea visible por defecto
-  if (skipTerminalButton) skipTerminalButton.style.display = 'none';
   if (supabaseClient) {
     await refreshDataFromSupabase();
     setupSupabaseRealtime();
@@ -1636,6 +1638,30 @@ window.addEventListener('load', async () => {
     };
 
     document.addEventListener('click', () => dropdown.classList.remove('active'));
+  }
+
+  // Lógica para Cancelar y Saltar Proceso en la Terminal
+  const cancelBtn = document.getElementById('cancelConnectionBtn');
+  const termLogo = document.getElementById('termLogo');
+  let termLogoClicks = 0;
+
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      if (timer) clearInterval(timer);
+      showScreen(welcomeScreen);
+    };
+  }
+
+  if (termLogo) {
+    termLogo.onclick = () => {
+      termLogoClicks++;
+      if (termLogoClicks >= 3) {
+        if (timer) clearInterval(timer);
+        termLogoClicks = 0;
+        renderChats();
+        showScreen(messageScreen);
+      }
+    };
   }
 });
 
