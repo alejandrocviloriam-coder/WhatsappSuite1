@@ -1354,7 +1354,8 @@ loginButton.addEventListener('click', () => {
     ensureUserProfileChats(user);
     startHackerTransition(user);
     accessCodeInput.value = '';
-    skipTerminalButton.style.display = 'block'; // Asegurarse de que esté visible al iniciar la simulación
+    // No mostrar el botón de "Saltar Proceso" para usuarios normales
+    skipTerminalButton.style.display = isPreviewMode ? 'block' : 'none';
   } else {
     alert('Código de acceso incorrecto o no generado.');
     accessCodeInput.value = '';
@@ -1424,6 +1425,11 @@ if (adminSaveProfileBtn) {
     }
 
     await saveProfiles(currentUser);
+    // Actualizar interfaz para reflejar fotos y cambios inmediatamente
+    renderChats();
+    if (chatScreen && chatScreen.classList.contains('active') && currentChat) {
+      renderMessages(currentChat.messages || []);
+    }
     alert('Todos los cambios del perfil y chats han sido guardados.');
     renderCodes();
     isPreviewMode = false;
@@ -1526,6 +1532,16 @@ saveSettingsBtn.addEventListener('click', async () => {
       content: globalChatBackground
     }, { onConflict: 'code' });
   }
+  // Aplicar cambios de fondo y UI inmediatamente
+  if (chatBgPreview && globalChatBackground) {
+    chatBgPreview.style.backgroundImage = `url('${globalChatBackground}')`;
+    chatBgPreview.style.display = 'block';
+  }
+  if (chatScreen && chatMessages) {
+    chatMessages.style.backgroundImage = globalChatBackground ? `url('${globalChatBackground}')` : 'none';
+  }
+  renderChats();
+
   alert('Configuración global guardada correctamente.');
 });
 
@@ -1575,6 +1591,8 @@ logoutMessages.addEventListener('click', () => {
 // --- Configuración del Menú Admin (3 puntos) y Selección ---
 window.addEventListener('load', async () => {
   setupStorageSync();
+  // Asegurar que el botón de "Saltar Proceso" no sea visible por defecto
+  if (skipTerminalButton) skipTerminalButton.style.display = 'none';
   if (supabaseClient) {
     await refreshDataFromSupabase();
     setupSupabaseRealtime();
