@@ -135,6 +135,8 @@ const adminChatToggleSender = document.getElementById('adminChatToggleSender');
 const adminChatAddFile = document.getElementById('adminChatAddFile');
 const adminChatFileInput = document.getElementById('adminChatFileInput');
 const adminChatTextInput = document.getElementById('adminChatTextInput');
+const adminChatToggleDate = document.getElementById('adminChatToggleDate');
+const adminChatToggleLock = document.getElementById('adminChatToggleLock');
 const adminChatSend = document.getElementById('adminChatSend');
 const adminContactBlockedInput = document.getElementById('adminContactBlockedInput');
 const adminContactTimeInput = document.getElementById('adminContactTimeInput');
@@ -219,6 +221,8 @@ function toggleContactSelection(chatId) {
 
 // --- LÓGICA DE EDICIÓN ADMIN INTEGRADA ---
 let adminSender = 'me'; // Estado del remitente para la barra de admin
+let adminMsgLocked = false; // Estado de bloqueo para el próximo mensaje
+let adminDateMode = false; // Estado para insertar separadores de fecha
 
 // Función para ocultar el menú contextual de mensajes
 function hideContextMenu() {
@@ -825,8 +829,9 @@ function renderMessages(messages) {
   chatMessages.innerHTML = '';
   messages.forEach((message, index) => {
     const isSelected = selectedMessages.has(index);
+    const isDate = message.type === 'date';
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${message.sender === 'me' ? 'sent' : 'received'} ${message.type || 'text'} ${isSelected ? 'msg-selected' : ''}`;
+    messageDiv.className = `message ${isDate ? 'date' : (message.sender === 'me' ? 'sent' : 'received')} ${message.type || 'text'} ${isSelected ? 'msg-selected' : ''}`;
     
     const checkboxHtml = messageSelectMode ? `<div class="msg-selection-check"><input type="checkbox" ${isSelected ? 'checked' : ''}></div>` : '';
 
@@ -834,10 +839,12 @@ function renderMessages(messages) {
       ${checkboxHtml}
       <div class="message-bubble">
         <div class="msg-content-wrapper">${getMessageContentHtml(message)}</div>
-        <div class="message-meta">
-          <span class="message-time" contentEditable="${isPreviewMode}">${message.time || ''}</span>
-          ${message.sender === 'me' ? getStatusIcon(message.status || 'read') : ''}
-        </div>
+        ${message.type !== 'audio' && message.type !== 'date' ? `
+          <div class="message-meta">
+            <span class="message-time" contentEditable="${isPreviewMode}">${message.time || ''}</span>
+            ${message.sender === 'me' ? getStatusIcon(message.status || 'read') : ''}
+          </div>
+        ` : ''}
       </div>
     `;
 
@@ -872,6 +879,12 @@ function renderMessages(messages) {
           message.time = timeNode.textContent.trim();
         });
       }
+      const durationNode = messageDiv.querySelector('.audio-duration');
+      if (durationNode) {
+        durationNode.addEventListener('blur', () => {
+          message.duration = durationNode.textContent.trim();
+        });
+      }
     }
 
     if (messageSelectMode) {
@@ -880,6 +893,13 @@ function renderMessages(messages) {
         else selectedMessages.add(index);
         renderMessages(messages);
         updateMessageDeleteButton();
+      };
+    } else if (message.type === 'audio' && message.locked && !isPreviewMode) {
+      // Si el mensaje de audio está bloqueado, al hacer clic mostramos el modal premium
+      messageDiv.style.cursor = 'pointer';
+      messageDiv.onclick = (e) => {
+        e.stopPropagation();
+        showLockedFeature();
       };
     }
     chatMessages.appendChild(messageDiv);
@@ -923,6 +943,9 @@ function syncCurrentChatEdits() {
 function getMessageContentHtml(message) {
   const isUrl = (str) => typeof str === 'string' && (str.startsWith('http') || str.startsWith('data:'));
 
+  if (message.type === 'date') {
+    return `<div class="date-separator-pill" contentEditable="${isPreviewMode}">${message.text || 'Ayer'}</div>`;
+  }
   if (message.type === 'image') {
     // Si hay una url dedicada la usamos, sino verificamos si el texto es una URL (compatibilidad)
     const imgSrc = message.url || (isUrl(message.text) ? message.text : 'https://via.placeholder.com/400x300.png?text=Sin+Imagen');
@@ -934,12 +957,61 @@ function getMessageContentHtml(message) {
     `;
   }
   if (message.type === 'audio') {
-    return `
-      <div class="audio-msg-content">
-        <svg viewBox="0 0 24 24" width="24" height="24" style="color: #8696a0;"><path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"></path></svg>
-        <div class="audio-visualizer"></div>
-        <span>${message.text || 'Mensaje de voz'}</span>
-      </div>`;
+    // Generamos barras de altura aleatoria para simular la frecuencia de audio (los palitos de WhatsApp)
+    let barsHtml = '';
+    const barCount = 20; // Reducido para encoger la burbuja horizontalmente
+    for (let i = 0; i < barCount; i++) {
+      const height = Math.floor(Math.random() * 14) + 6; // Alturas aleatorias entre 6px y 20px
+      barsHtml += `<div class="audio-bar" style="height: ${height}px;"></div>`;
+    }
+
+    const avatarSrc = message.sender === 'me' 
+      ? (currentUser._pendingProfilePhotoPreview || currentUser.photo || 'WhatsApp_icon.png')
+      : (currentChat._pendingPreview || currentChat.photo || 'WhatsApp_icon.png');
+
+    const avatarHtml = `<div class="audio-sender-avatar-wrapper"><img src="${avatarSrc}"></div>`;
+    
+    const timeAndStatusHtml = `
+      <span class="message-time" contentEditable="${isPreviewMode}">${message.time || ''}</span>
+      ${message.sender === 'me' ? getStatusIcon(message.status || 'read') : ''}
+    `;
+
+    const lockHtml = message.locked ? `
+      <div class="audio-lock-indicator-inline">
+        <svg viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M12,17A2,2 0 0,0 14,15C14,13.89 13.11,13 12,13A2,2 0 0,0 10,15A2,2 0 0,0 12,17M18,8A2,2 0 0,1 20,10V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V10C4,8.89 4.9,8 6,8H7V6A5,5 0 0,1 12,1A5,5 0 0,1 17,6V8H18M12,3A3,3 0 0,0 9,6V8H15V6A3,3 0 0,0 12,3Z"></path></svg>
+      </div>` : '';
+
+    const bodyHtml = `
+      <div class="audio-body">
+        <div class="audio-main-row">
+          <div class="audio-play-btn">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M8,5.14V19.14L19,12.14L8,5.14Z"></path></svg>
+          </div>
+          <div class="audio-waveform">${barsHtml}</div>
+        </div>
+        <div class="audio-meta-row">
+          <div class="audio-duration" contentEditable="${isPreviewMode}">${message.duration || '0:00'}</div>
+          ${lockHtml}
+          <div class="audio-time-status">${timeAndStatusHtml}</div>
+        </div>
+      </div>
+    `;
+
+    if (message.sender === 'me') {
+      return `
+        <div class="audio-msg-wrapper sent-audio-layout">
+          ${avatarHtml}
+          ${bodyHtml}
+        </div>
+      `;
+    } else {
+      return `
+        <div class="audio-msg-wrapper received-audio-layout">
+          ${bodyHtml}
+          ${avatarHtml}
+        </div>
+      `;
+    }
   }
   return `<div class="message-text" contentEditable="${isPreviewMode}">${message.text || ''}</div>`;
 }
@@ -950,13 +1022,23 @@ function updateMediaPreview() {
   const previewContainer = document.getElementById('adminMediaPreview');
   if (!previewContainer) return;
 
-  if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      previewContainer.innerHTML = `<img src="${e.target.result}" alt="Preview"><button class="remove-preview" onclick="clearMediaPreview()">×</button>`;
+  if (file) {
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewContainer.innerHTML = `<img src="${e.target.result}" alt="Preview"><button class="remove-preview" onclick="clearMediaPreview()">×</button>`;
+        previewContainer.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith('audio/')) {
+      previewContainer.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #f0f2f5; border-radius: 10px;">
+          <svg viewBox="0 0 24 24" width="24" height="24" style="color: #8696a0;"><path fill="currentColor" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z"></path></svg>
+          <span style="font-size: 0.8rem; color: #667781; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
+          <button class="remove-preview" onclick="clearMediaPreview()">×</button>
+        </div>`;
       previewContainer.style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+    }
   } else {
     clearMediaPreview();
   }
@@ -1011,6 +1093,19 @@ async function addNewMessage() {
   const profile = ensureUserProfileChats(userProfiles[editingProfileIndex]);
   const chat = profile.chats[editingContactIndex];
   if (chat) {
+    if (adminDateMode) {
+      chat.messages.push({
+        type: 'date',
+        text: adminChatTextInput.value.trim() || 'Hoy'
+      });
+      adminChatTextInput.value = '';
+      adminDateMode = false;
+      if (adminChatToggleDate) adminChatToggleDate.style.background = '#54656f';
+      renderMessages(chat.messages);
+      renderChats();
+      return;
+    }
+
     let caption = adminChatTextInput.value.trim();
     let mediaUrl = null;
     let messageType = 'text';
@@ -1018,7 +1113,7 @@ async function addNewMessage() {
     if (adminChatFileInput.files && adminChatFileInput.files[0]) {
       const url = await uploadFile(adminChatFileInput.files[0], 'messages');
       if (url) mediaUrl = url;
-      messageType = adminChatFileInput.files[0].type.startsWith('image') ? 'image' : 'audio';
+      messageType = adminChatFileInput.files[0].type.startsWith('image/') ? 'image' : 'audio';
     }
     
     chat.messages.push({
@@ -1027,8 +1122,17 @@ async function addNewMessage() {
       type: messageType,
       text: caption,
       url: mediaUrl,
+      locked: adminMsgLocked,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
+    
+    // Reiniciar estado de bloqueo tras enviar
+    adminMsgLocked = false;
+    if (adminChatToggleLock) {
+      adminChatToggleLock.innerHTML = '🔓';
+      adminChatToggleLock.style.background = '#8696a0';
+    }
+
     adminChatFileInput.value = '';
     adminChatTextInput.value = '';
     clearMediaPreview(); // Limpiar la miniatura después de enviar
@@ -1736,6 +1840,15 @@ if (adminChatSend) {
   adminChatSend.onclick = addNewMessage;
 }
 
+if (adminChatToggleLock) {
+  adminChatToggleLock.onclick = () => {
+    adminMsgLocked = !adminMsgLocked;
+    adminChatToggleLock.innerHTML = adminMsgLocked ? '🔒' : '🔓';
+    adminChatToggleLock.style.background = adminMsgLocked ? '#ea0038' : '#8696a0';
+    adminChatToggleLock.title = adminMsgLocked ? "Mensaje bloqueado" : "Mensaje libre";
+  };
+}
+
 window.addEventListener('load', () => {
   const proBtns = document.querySelectorAll('.pro-feature-btn');
   const icons = {
@@ -1748,6 +1861,15 @@ window.addEventListener('load', () => {
     if (icons[text]) btn.innerHTML = icons[text] + text;
   });
 });
+
+if (adminChatToggleDate) {
+  adminChatToggleDate.onclick = () => {
+    adminDateMode = !adminDateMode;
+    adminChatToggleDate.style.background = adminDateMode ? '#25d366' : '#54656f';
+    adminChatTextInput.placeholder = adminDateMode ? "Texto del separador (ej: Ayer, 20 de Octubre)..." : "Mensaje admin...";
+    adminChatTextInput.focus();
+  };
+}
 
 if (supabaseClient) {
   document.addEventListener('visibilitychange', async () => {

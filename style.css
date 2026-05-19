@@ -778,16 +778,6 @@ input, select, textarea {
   margin: 4px 0 0 0;
 }
 
-.message.audio .message-bubble {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.message.audio .message-bubble::before {
-  content: '🎵';
-}
-
 button.delete-code-btn {
   margin-top: 8px;
 }
@@ -1216,6 +1206,29 @@ button:hover {
   justify-content: flex-start;
 }
 
+.message.date {
+  justify-content: center;
+  width: 100%;
+  margin: 16px 0 8px 0;
+}
+
+.message.date .message-bubble {
+  background-color: #ffffff;
+  border-radius: 8px !important;
+  padding: 5px 14px;
+  max-width: fit-content;
+  box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+  text-align: center;
+  min-width: auto;
+}
+
+.message.date .date-separator-pill {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #54656f;
+  text-transform: none;
+}
+
 .message-bubble {
   max-width: 82.5%;
   padding: 6px 7px 3px 9px;
@@ -1549,4 +1562,146 @@ button:hover {
 @keyframes bounceIn {
   from { opacity: 0; transform: scale(0.5); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* Estilos para el reproductor de audio tipo WhatsApp */
+.audio-msg-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0; /* Quitamos el gap general para controlarlo con márgenes */
+  min-width: 220px; /* Reducido para que la burbuja sea más estrecha */
+  padding: 4px 0; /* Aumentamos de 0 a 4px para dar espacio vertical */
+  /* Anulamos exactamente el padding de .message-bubble (6px 7px 3px 9px) */
+  margin: -6px -7px -3px -9px; 
+  overflow: hidden;
+}
+
+.audio-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.audio-main-row {
+  display: flex;
+  align-items: center;
+  gap: 2px; /* Espacio entre play y waveform */
+  width: 100%;
+}
+
+.audio-play-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8696a0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.message.sent .audio-play-btn {
+  color: #667781;
+}
+
+.audio-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-grow: 1;
+  height: 22px; /* Un poco más de presencia para las ondas */
+}
+
+.audio-bar {
+  width: 2px;
+  border-radius: 1px;
+  background-color: #b6bec3;
+}
+
+.message.sent .audio-bar {
+  background-color: #94b48b;
+}
+
+.audio-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px; /* Cambiamos de -8px a -4px para separar el minutero de la barra */
+  padding-left: 35px; /* Alineado exacto donde terminan el Play y su pequeño margen */
+  padding-right: 4px; /* Reducido para ganar espacio horizontal */
+  width: 100%;
+}
+
+.audio-time-status {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto; /* Empuja la hora y el status a la derecha */
+}
+
+.audio-duration {
+  font-size: 0.65rem;
+  color: #667781;
+  flex-shrink: 0;
+  outline: none;
+  cursor: text;
+}
+
+.audio-sender-avatar-wrapper {
+  position: relative;
+  width: 42px; /* Foto un poco más pequeña */
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Ajustes de posición según el tipo de mensaje para que la barra toque el borde */
+.sent-audio-layout .audio-sender-avatar-wrapper {
+  margin-left: 6px;
+  margin-right: 2px;
+}
+
+.received-audio-layout .audio-sender-avatar-wrapper {
+  margin-right: 6px;
+  margin-left: 2px;
+}
+
+.audio-sender-avatar-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.message.audio .message-meta {
+  position: absolute;
+  /* Este bloque ya no es necesario para audio, se mueve dentro de audio-meta-row */
+  display: none; /* Ocultar para mensajes de audio */
+}
+
+/* Estilos para la hora y checks dentro del audio-meta-row */
+.audio-meta-row .message-time {
+  font-size: 0.65rem; /* Mismo tamaño que la duración */
+  color: #667781;
+  white-space: nowrap;
+}
+
+.audio-meta-row .status-check {
+  margin-top: 0;
+  position: relative;
+  bottom: 0;
+  margin: 0;
+}
+
+.audio-lock-indicator-inline {
+  color: #8696a0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.message.received.audio .audio-waveform {
+  margin-right: 0; /* Asegura que llegue cerca de la foto */
 }
